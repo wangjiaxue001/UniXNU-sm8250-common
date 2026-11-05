@@ -1,0 +1,153 @@
+/*
+ * Qualcomm SM8250 (kona) — 共享硬件描述
+ *
+ * 收录范围：只写 ADT 生成器会消费、且已在目标设备确认的节点。
+ * 生成器（scripts/unixnu/devicetree.py）只导出带 unixnu,adt-name 的启用节点，
+ * 并且只按白名单复制属性：compatible、device_type、reg、reg-names、
+ * interrupt-names、clock-names、method、phandle、#*-cells、clock-frequency、
+ * timebase-frequency、redistributor-stride、interrupt-controller、
+ * dma-coherent、iommus、clocks、unixnu 前缀属性。其余属性会被忽略，
+ * 所以这里不搬原厂 DTS 的 vendor 私有属性。
+ *
+ * 来源：Xiaomi Mi 10 Pro (cmi) 的 /sys/firmware/fdt，经 tools/fdt2dts.py 转换
+ * （见 cmi 仓库 inputs.md）。
+ *
+ * 已收录：cpus、psci、GIC（intc）、UFS 主机（ufshc）。
+ * 未收录（按驱动适配顺序后续追加）：mdss/dsi、i2c/spi、usb、pdc、rpmh。
+ */
+
+/ {
+	#address-cells = <2>;
+	#size-cells = <2>;
+
+	/* 实测：/proc/device-tree/psci，method = smc；多 CPU 时必需 */
+	psci {
+		compatible = "arm,psci-1.0", "arm,psci-0.2";
+		method = "smc";
+	};
+
+	/*
+	 * 实测：cpu@0 … cpu@700，compatible = "qcom,kryo"，reg = MPIDR affinity。
+	 * timebase-frequency 不在原厂 DT 里（Qualcomm 用固定 19.2 MHz 架构定时器），
+	 * 生成器要求 /cpus 必须提供该属性，此处按 SM8250 架构值填写，待真机核对。
+	 */
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		timebase-frequency = <19200000>;
+
+		cpu@0 {
+			device_type = "cpu";
+			compatible = "qcom,kryo";
+			reg = <0x0>;
+			unixnu,cluster-type = "E";
+		};
+
+		cpu@100 {
+			device_type = "cpu";
+			compatible = "qcom,kryo";
+			reg = <0x100>;
+			unixnu,cluster-type = "E";
+		};
+
+		cpu@200 {
+			device_type = "cpu";
+			compatible = "qcom,kryo";
+			reg = <0x200>;
+			unixnu,cluster-type = "E";
+		};
+
+		cpu@300 {
+			device_type = "cpu";
+			compatible = "qcom,kryo";
+			reg = <0x300>;
+			unixnu,cluster-type = "E";
+		};
+
+		cpu@400 {
+			device_type = "cpu";
+			compatible = "qcom,kryo";
+			reg = <0x400>;
+			unixnu,cluster-type = "P";
+		};
+
+		cpu@500 {
+			device_type = "cpu";
+			compatible = "qcom,kryo";
+			reg = <0x500>;
+			unixnu,cluster-type = "P";
+		};
+
+		cpu@600 {
+			device_type = "cpu";
+			compatible = "qcom,kryo";
+			reg = <0x600>;
+			unixnu,cluster-type = "P";
+		};
+
+		cpu@700 {
+			device_type = "cpu";
+			compatible = "qcom,kryo";
+			reg = <0x700>;
+			unixnu,cluster-type = "P";
+		};
+	};
+
+	/*
+	 * 实测（原厂 DT）：
+	 *   0x17a00000 + 0x10000   = GICD
+	 *   0x17a60000 + 0x100000  = GICR
+	 *   redistributor-stride   = 0x20000
+	 * 注意 0x0b220000 那个 interrupt-controller 是 qcom,kona-pdc（PDC），不是 GICR。
+	 */
+	intc: interrupt-controller@17a00000 {
+		compatible = "arm,gic-v3";
+		unixnu,adt-name = "intc";
+		phandle = <0x1>;
+		#interrupt-cells = <3>;
+		interrupt-controller;
+		redistributor-stride = <0x0 0x20000>;
+		reg = <0x0 0x17a00000 0x0 0x10000>,
+		      <0x0 0x17a60000 0x0 0x100000>;
+	};
+
+	/*
+	 * UFS 主机控制器。实测（原厂 DT /soc/ufshc@1d84000）：
+	 *   reg   = <0x1d84000 0x3000>（控制器）、<0x1d90000 0x8000>（ICE）
+	 *   interrupts = <0 0x109 4>   SPI 265，电平高有效
+	 *   lanes-per-direction = 2
+	 * 原厂 compatible 是 "qcom,ufshc"。
+	 *
+	 * 注意：ShengUfs 的 personality 目前写的是 IONameMatch = "qcom,sm8550-ufshc"，
+	 * 与 "qcom,ufshc" 不匹配。按设备树匹配指南，需要扩展该 personality
+	 * 或在板级 DTS 换用它能识别的名字——这是组件侧改动，需单独审核。
+	 *
+	 * clocks / resets 未写入：ShengUfs 当前通过 C++ 常量和操作访问 GCC 资源
+	 * （见 UFS 移植页「硬件清单」），DTS 里写 clocks 会引入 gcc provider
+	 * 与 #clock-cells 解析要求。
+	 */
+	ufs: ufshc@1d84000 {
+		compatible = "qcom,ufshc";
+		unixnu,adt-name = "ufshc";
+		status = "disabled";
+		interrupt-parent = <&intc>;
+		interrupts = <0x0 0x109 0x4>;
+		reg = <0x0 0x1d84000 0x0 0x3000>,
+		      <0x0 0x1d90000 0x0 0x8000>;
+	};
+
+	/*
+	 * UFS PHY。实测 /soc/ufsphy_mem@1d87000：
+	 *   reg = <0x1d87000 0xe00>（phy_mem）、<0x1d90000 0x8000>（ufs_ice）
+	 *   compatible = "qcom,ufs-phy-qmp-v4"，lanes-per-direction = 2
+	 * 不导出到 ADT：ShengUfs 通过 C++ 常量访问 PHY 资源。
+	 */
+	ufsphy: ufsphy@1d87000 {
+		compatible = "qcom,ufs-phy-qmp-v4";
+		status = "disabled";
+		#phy-cells = <0>;
+		lanes-per-direction = <2>;
+		reg = <0x0 0x1d87000 0x0 0xe00>,
+		      <0x0 0x1d90000 0x0 0x8000>;
+	};
+};

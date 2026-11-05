@@ -1,0 +1,14 @@
+"schema_version" = 2
+
+["soc"]
+"name" = "sm8250"
+"description" = "Qualcomm SM8250 (kona)"
+# 硬件数据来源：上游 sm8250 设备树。选定并核对提交后替换 revision。
+"source_repository" = "https://github.com/torvalds/linux"
+"source_revision" = "REQUIRED_REVIEWED_COMMIT"
+
+["components"]
+# 只列已核对硬件范围与 ABI 的实现。SM8250 目前没有 Adreno/Metal 实现，
+# 因此不包含 Adreno740/AdrenoMetal（那是 A740/SM8550 的接口）。
+# 存储、触控、显示实现需按组件目录逐项核对后再追加。
+"include" = ["ArmCpu", "ArmDTPlatform", "SoftwareAES"]

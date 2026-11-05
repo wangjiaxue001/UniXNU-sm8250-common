@@ -1,0 +1,3 @@
+# SM8250 SoC 级 XNU 补丁序列，每行一个相对本目录的路径，按行序应用。
+# 当前无补丁：cmi 尚无需要在 SoC 层修复的 XNU 行为。
+# 空 series 是合法状态（docs/zh/porting/soc-support.md 第 3 节第 3 条）。
